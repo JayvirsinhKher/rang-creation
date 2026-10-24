@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Retail Management System</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Top Progress / Loading Indicator -->
+  <div id="loading-bar" class="loading-bar" role="status" aria-label="Loading"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <div class="app-shell">
+    <!-- Responsive Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar" aria-label="Main Navigation">
+      <div class="sidebar-brand">
+        <span>₹ RetailOS</span>
+        <span class="badge badge-info" style="font-size:10px;">GST / POS</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard">1. Dashboard</button>
+        <button class="nav-item" data-view="products">2. Products</button>
+        <button class="nav-item" data-view="inventory">3. Inventory</button>
+        <button class="nav-item" data-view="pos">4. Sales / POS</button>
+        <button class="nav-item" data-view="invoices">5. Sales Invoices</button>
+        <button class="nav-item" data-view="purchases">6. Purchases</button>
+        <button class="nav-item" data-view="customers">7. Customers</button>
+        <button class="nav-item" data-view="suppliers">8. Suppliers</button>
+        <button class="nav-item" data-view="expenses">9. Expenses</button>
+        <button class="nav-item" data-view="payments">10. Payments</button>
+        <button class="nav-item" data-view="reports">11. Reports</button>
+        <button class="nav-item" data-view="settings">12. Settings</button>
+      </nav>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="main-area">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menu-toggle" class="menu-toggle" aria-label="Toggle Menu">&#9776;</button>
+          <strong id="topbar-shop-name" style="font-size:16px;">Shree Ganesh Kirana &amp; General Store</strong>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="topbar-conn-badge" class="badge badge-warning">Connecting...</span>
+          <button class="btn btn-secondary btn-sm" onclick="refreshBundle()">&#8635; Sync</button>
+        </div>
+      </header>
+
+      <!-- Dynamic Module Container rendered by app.js -->
+      <main id="view-container" class="content-container"></main>
+    </div>
+  </div>
+
+  <!-- Reusable Accessible Modal Container -->
+  <div id="modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title" style="font-size:16px;font-weight:600;">Modal Title</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal()" aria-label="Close modal">&times;</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Printable A4 Invoice / 80mm Thermal Receipt Container -->
+  <div id="printable-area"></div>
+
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
