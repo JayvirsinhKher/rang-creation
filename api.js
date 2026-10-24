@@ -676,6 +676,25 @@ const ApiAdapter = (function () {
       case 'reconcilePartyBalances':
         return Promise.resolve({ custUpdated: 0, supUpdated: 0 });
 
+      case 'deleteProduct': {
+        const pid = payload.ProductID;
+        db.products = db.products.filter(p => p.ProductID !== pid);
+        db.stockMovements = db.stockMovements.filter(m => m.ProductID !== pid);
+        saveSandboxDB(db);
+        return Promise.resolve({ message: 'Product deleted.' });
+      }
+
+      case 'deleteParty': {
+        if (payload.id === 'CUS-0001') return Promise.reject(new Error('Cannot delete Walk-in Customer.'));
+        if (payload.partyType === 'SUPPLIER') {
+          db.suppliers = db.suppliers.filter(s => s.SupplierID !== payload.id);
+        } else {
+          db.customers = db.customers.filter(c => c.CustomerID !== payload.id);
+        }
+        saveSandboxDB(db);
+        return Promise.resolve({ message: 'Deleted.' });
+      }
+      
       default:
         return Promise.resolve({});
     }

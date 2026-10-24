@@ -68,6 +68,12 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isActiveRecord(val) {
+  if (val === undefined || val === null || val === '') return true;
+  const s = String(val).trim().toUpperCase();
+  return s === 'TRUE' || s === '1' || s === 'YES' || s === 'ACTIVE';
+}
+
 function showLoader(active) {
   const bar = document.getElementById('loading-bar');
   if (bar) bar.classList.toggle('active', Boolean(active));
@@ -202,7 +208,7 @@ function renderDashboard(container) {
   const todaySalesRev = todaySales.reduce((acc, s) => acc + Number(s.GrandTotal || 0), 0);
   const monthSalesRev = monthSales.reduce((acc, s) => acc + Number(s.GrandTotal || 0), 0);
 
-  const lowStockProducts = b.products.filter(p => p.Active === 'TRUE' && Number(p.CurrentStock) <= Number(p.MinStock));
+  const lowStockProducts = b.products.filter(p => isActiveRecord(p.Active) && Number(p.CurrentStock) <= Number(p.MinStock));
   const stockValuation = b.products.reduce((acc, p) => acc + (Math.max(0, Number(p.CurrentStock || 0)) * Number(p.PurchaseCost || 0)), 0);
 
   const custReceivables = b.customers.reduce((acc, c) => acc + Number(c.CachedBalance || 0), 0);
@@ -389,17 +395,19 @@ function filterProductTable() {
   if (!tbody) return;
 
   const filtered = AppState.bundle.products.filter(p => {
+    const activeBool = isActiveRecord(p.Active);
     const matchQ = !q ||
       String(p.Name).toLowerCase().includes(q) ||
       String(p.SKU).toLowerCase().includes(q) ||
       String(p.Barcode).toLowerCase().includes(q);
     const matchCat = !cat || p.Category === cat;
-    const matchStatus = !status || String(p.Active) === status;
+    const matchStatus = !status || (status === 'TRUE' ? activeBool : !activeBool);
     return matchQ && matchCat && matchStatus;
   });
 
   tbody.innerHTML = filtered.map(p => {
     const isLow = Number(p.CurrentStock) <= Number(p.MinStock);
+    const activeBool = isActiveRecord(p.Active);
     return `
       <tr>
         <td><strong>${esc(p.SKU)}</strong><br><small style="color:var(--text-muted)">${esc(p.Barcode || '-')}</small></td>
@@ -413,13 +421,28 @@ function filterProductTable() {
             ${esc(p.CurrentStock)} ${esc(p.Unit)}
           </span>
         </td>
-        <td><span class="badge ${p.Active === 'TRUE' ? 'badge-info' : 'badge-warning'}">${p.Active === 'TRUE' ? 'Active' : 'Inactive'}</span></td>
-        <td>
+        <td><span class="badge ${activeBool ? 'badge-info' : 'badge-warning'}">${activeBool ? 'Active' : 'Inactive'}</span></td>
+        <td style="display:flex;gap:4px;">
           <button class="btn btn-secondary btn-sm" onclick="openProductModal('${esc(p.ProductID)}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteProductUI('${esc(p.ProductID)}', '${esc(p.Name)}')">Delete</button>
         </td>
       </tr>
     `;
   }).join('') || '<tr><td colspan="9">No matching products found.</td></tr>';
+}
+
+async function deleteProductUI(productId, productName) {
+  if (!confirm(`Are you sure you want to delete "${productName}" (${productId})?`)) return;
+  showLoader(true);
+  try {
+    const res = await ApiAdapter.request('deleteProduct', { ProductID: productId });
+    showToast(res.message || 'Product deleted.');
+    await refreshBundle();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    showLoader(false);
+  }
 }
 
 function openProductModal(productId = '') {
@@ -492,8 +515,8 @@ function openProductModal(productId = '') {
         <div class="form-group">
           <label>Status</label>
           <select name="Active">
-            <option value="TRUE" ${p.Active !== 'FALSE' ? 'selected' : ''}>Active</option>
-            <option value="FALSE" ${p.Active === 'FALSE' ? 'selected' : ''}>Inactive</option>
+            <option value="TRUE" ${isActiveRecord(p.Active) ? 'selected' : ''}>Active</option>
+            <option value="FALSE" ${!isActiveRecord(p.Active) ? 'selected' : ''}>Inactive</option>
           </select>
         </div>
       </div>
@@ -850,7 +873,7 @@ function renderPOSCatalog() {
   const grid = document.getElementById('pos-catalog-grid');
   if (!grid) return;
 
-  const activeProds = AppState.bundle.products.filter(p => p.Active === 'TRUE' && (
+  const activeProds = AppState.bundle.products.filter(p => isActiveRecord(p.Active) && (
     !q ||
     String(p.Name).toLowerCase().includes(q) ||
     String(p.SKU).toLowerCase().includes(q) ||
@@ -878,7 +901,7 @@ function handlePOSBarcodeEnter(e) {
   const q = e.target.value.trim().toLowerCase();
   if (!q) return;
   const match = AppState.bundle.products.find(p =>
-    p.Active === 'TRUE' && (String(p.Barcode).toLowerCase() === q || String(p.SKU).toLowerCase() === q)
+    isActiveRecord(p.Active) && (String(p.Barcode).toLowerCase() === q || String(p.SKU).toLowerCase() === q)
   );
   if (match) {
     addProductToPOSCart(match.ProductID);
@@ -1678,8 +1701,9 @@ function renderParties(container, partyType) {
                   <td style="font-weight:700;color:${Number(p.CachedBalance) > 0 ? 'var(--danger)' : 'var(--success)'}">
                     ${fmtINR(p.CachedBalance)}
                   </td>
-                  <td>
+                  <td style="display:flex;gap:4px;">
                     <button class="btn btn-secondary btn-sm" onclick="openPartyModal('${partyType}', '${esc(p[idField])}')">Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="deletePartyUI('${partyType}', '${esc(p[idField])}', '${esc(p.Name)}')">Delete</button>
                   </td>
                 </tr>
               `).join('')}
