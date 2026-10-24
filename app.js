@@ -1701,7 +1701,7 @@ function renderParties(container, partyType) {
                   <td style="font-weight:700;color:${Number(p.CachedBalance) > 0 ? 'var(--danger)' : 'var(--success)'}">
                     ${fmtINR(p.CachedBalance)}
                   </td>
-                  <td style="display:flex;gap:4px;">
+                  <td>
                     <button class="btn btn-secondary btn-sm" onclick="openPartyModal('${partyType}', '${esc(p[idField])}')">Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deletePartyUI('${partyType}', '${esc(p[idField])}', '${esc(p.Name)}')">Delete</button>
                   </td>
