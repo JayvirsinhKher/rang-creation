@@ -1,8 +1,11 @@
 SKU,Barcode,Name,Category,Brand,Unit,PurchaseCost,SellingPrice,GSTRate,HSN,OpeningStock,MinStock,Description
-GRC-AT-05,8901725121112,Aashirvaad Shudh Chakki Atta 5kg,Groceries & Staples,ITC,Bag,215.00,245.00,5,1101,25,10,Whole wheat flour 5kg pack
-DRY-AM-01,8901262010016,Amul Taaza Toned Milk 1L Tetrapack,Dairy & Beverages,Amul,Pack,66.00,72.00,5,0401,40,15,UHT Treated Toned Milk 1L
-BEV-TT-500,8901058851234,Tata Tea Gold 500g,Dairy & Beverages,Tata,Pack,235.00,280.00,5,0902,8,10,Assam tea with gently rolled aromatic long leaves
-SNK-MG-420,8901058000290,Maggi 2-Minute Noodles 6-Pack (420g),Packaged Snacks,Nestle,Pack,72.00,84.00,12,1902,30,12,Masala instant noodles family pack
-HHS-SX-01,8901030845215,Surf Excel Easy Wash Detergent 1kg,Household Supplies,HUL,Pack,112.00,135.00,18,3402,6,10,Superfast stain removal detergent powder
-PER-DT-125,8901396321408,Dettol Original Soap 4x125g,Personal Care,Reckitt,Pack,132.00,160.00,18,3401,20,8,Antibacterial bath soap value pack
-GRC-FO-01,8901058859995,Fortune Sunlite Refined Sunflower Oil 1L,Groceries & Staples,Adani Wilmar,Ltr,118.00,140.00,5,1512,35,12,Refined sunflower cooking oil pouch
+JWL-NK-001,8904001001011,Kundan Pearl Bridal Choker Necklace Set,Imitation Jewellery,Royal Sparkle,Set,420.00,799.00,3,7117,18,5,Gold-plated Kundan choker with matching earrings and maang tikka
+JWL-ER-002,8904001001028,Oxidised Silver Jhumka Earrings Large,Imitation Jewellery,Ethnic Craft,Pair,65.00,149.00,3,7117,45,12,Traditional oxidised German silver dome jhumkas
+JWL-AD-003,8904001001035,American Diamond Rose Gold Pendant Set,Imitation Jewellery,Zaveri Style,Set,280.00,549.00,3,7117,20,6,CZ stone rose-gold plated pendant chain with studs
+BNG-KD-001,8904002002017,Velvet Silk Thread Kundan Bangle Set (24 Pcs),Bangles & Kada,Shree Bangles,Set,160.00,320.00,3,7117,30,8,Bridal Chuda & velvet bangle set Size 2.4 / 2.6
+BNG-BR-002,8904002002024,Antique Gold Plated Rajwadi Kada Pair,Bangles & Kada,Shree Bangles,Pair,190.00,380.00,3,7117,22,6,Screw-open Meenakari work Rajwadi Kada pair
+HAR-CL-001,8904003003010,Korean Matte Pastel Jumbo Hair Claw Clips,Hair Accessories,GlamHair,Pcs,28.00,69.00,18,9615,80,20,Non-slip Matte finish korean claw clips
+HAR-SC-002,8904003003027,Satin Silk Scrunchies Pack of 6,Hair Accessories,GlamHair,Pack,45.00,110.00,12,9615,50,15,Soft Mulberry satin hair scrunchies assorted colors
+HAR-BR-003,8904003003034,Bridal Floral Pearl Hair Brooch & Gajra Pin,Hair Accessories,Ethnic Craft,Pcs,75.00,165.00,3,7117,25,8,Artificial pearl and crystal juda hair accessory
+GFT-HM-001,8904004004013,Festive Luxury Jewellery & Accessories Gift Hamper,Gift Hampers,FestiveBox,Hamper,550.00,1099.00,18,4202,12,4,Curated box with AD pendant set + 2 scrunchies + claw clip + greeting card
+GFT-HM-002,8904004004020,Return Gift Bangle & Potli Combo Pack,Gift Hampers,FestiveBox,Hamper,95.00,185.00,12,4202,60,15,Embroidered potli bag with 4 Meenakari bangles for wedding return gifts

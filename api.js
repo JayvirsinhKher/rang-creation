@@ -1,15 +1,12 @@
 /**
  * FRONTEND-BACKEND TRANSPORT ADAPTER (api.js)
- * Supports:
- * 1. Native Google Apps Script HtmlService (google.script.run)
- * 2. External Hosting via GitHub Pages / Google Sites (CORS-safe POST text/plain)
- * 3. Instant Local Sandbox Fallback (when testing UI before linking Web App URL)
+ * Configured for: Rang Creation By Ekta
  */
 
 const ApiAdapter = (function () {
   const STORAGE_URL_KEY = 'RMS_GAS_WEBAPP_URL';
   const STORAGE_EMAIL_KEY = 'RMS_USER_EMAIL_HINT';
-  const STORAGE_SANDBOX_KEY = 'RMS_LOCAL_SANDBOX_DB_V1';
+  const STORAGE_SANDBOX_KEY = 'RMS_LOCAL_SANDBOX_RANG_V1';
 
   function getEndpointUrl() {
     return localStorage.getItem(STORAGE_URL_KEY) || '';
@@ -46,7 +43,6 @@ const ApiAdapter = (function () {
       userEmailHint: getUserEmailHint()
     };
 
-    // 1. Native Google Apps Script HtmlService transport
     if (isNativeAppsScript()) {
       return new Promise((resolve, reject) => {
         window.google.script.run
@@ -59,7 +55,6 @@ const ApiAdapter = (function () {
       });
     }
 
-    // 2. External Fetch to deployed Google Apps Script Web App URL
     const endpoint = getEndpointUrl();
     if (endpoint) {
       const controller = new AbortController();
@@ -89,13 +84,9 @@ const ApiAdapter = (function () {
       }
     }
 
-    // 3. Interactive Local Sandbox Mode (Works out-of-the-box before configuring Web App URL)
     return executeLocalSandbox(reqEnvelope);
   }
 
-  /**
-   * Local Sandbox Engine (Mirrors Code.gs data structures & business rules)
-   */
   function getSandboxDB() {
     const raw = localStorage.getItem(STORAGE_SANDBOX_KEY);
     if (raw) {
@@ -103,10 +94,10 @@ const ApiAdapter = (function () {
     }
     const today = new Date().toISOString().slice(0, 10);
     const seed = {
-      user: { email: 'owner@shop.in', name: 'Rajesh Patel (Owner)', role: 'ADMIN', storeId: 'STR-01' },
+      user: { email: 'owner@rangcreation.in', name: 'Store Owner (Admin)', role: 'ADMIN', storeId: 'STR-01' },
       settings: {
-        SHOP_NAME: 'Shree Ganesh Kirana & General Store',
-        SHOP_ADDRESS: '42, MG Road, Alkapuri, Vadodara, Gujarat - 390007',
+        SHOP_NAME: 'Rang Creation By Ekta',
+        SHOP_ADDRESS: 'D-103/104, Meet Residency, Vadodara, Gujarat - 390019',
         SHOP_PHONE: '+91 9876543210',
         SHOP_GSTIN: '24AABCS1429B1Z1',
         FINANCIAL_YEAR: '2026-27',
@@ -116,68 +107,64 @@ const ApiAdapter = (function () {
         AUTO_DAILY_SALES_EMAIL: 'FALSE',
         AUTO_PAYMENT_REMINDERS: 'FALSE',
         AUTO_DAILY_BACKUP: 'FALSE',
-        ALERT_RECIPIENT_EMAIL: 'owner@shop.in',
+        ALERT_RECIPIENT_EMAIL: 'owner@rangcreation.in',
         BACKUP_FOLDER_ID: ''
       },
       stores: [
-        { StoreID: 'STR-01', StoreName: 'Main Branch - Alkapuri', Address: '42, MG Road, Vadodara', Phone: '+91 9876543210', GSTIN: '24AABCS1429B1Z1', StateCode: '24', Active: 'TRUE' }
+        { StoreID: 'STR-01', StoreName: 'Rang Creation By Ekta - Main Studio', Address: 'D-103/104, Meet Residency, Vadodara', Phone: '+91 9876543210', GSTIN: '24AABCS1429B1Z1', StateCode: '24', Active: 'TRUE' }
       ],
       categories: [
-        { CategoryID: 'CAT-01', CategoryName: 'Groceries & Staples', Active: 'TRUE' },
-        { CategoryID: 'CAT-02', CategoryName: 'Dairy & Beverages', Active: 'TRUE' },
-        { CategoryID: 'CAT-03', CategoryName: 'Packaged Snacks', Active: 'TRUE' },
-        { CategoryID: 'CAT-04', CategoryName: 'Personal Care', Active: 'TRUE' },
-        { CategoryID: 'CAT-05', CategoryName: 'Household Supplies', Active: 'TRUE' }
+        { CategoryID: 'CAT-01', CategoryName: 'Imitation Jewellery', Active: 'TRUE' },
+        { CategoryID: 'CAT-02', CategoryName: 'Bangles & Kada', Active: 'TRUE' },
+        { CategoryID: 'CAT-03', CategoryName: 'Hair Accessories', Active: 'TRUE' },
+        { CategoryID: 'CAT-04', CategoryName: 'Gift Hampers', Active: 'TRUE' },
+        { CategoryID: 'CAT-05', CategoryName: 'Bridal Sets & Packaging', Active: 'TRUE' }
       ],
       products: [
-        { ProductID: 'PRD-0001', SKU: 'GRC-AT-05', Barcode: '8901725121112', Name: 'Aashirvaad Shudh Chakki Atta 5kg', Category: 'Groceries & Staples', Brand: 'ITC', Unit: 'Bag', PurchaseCost: 215, SellingPrice: 245, GSTRate: 5, HSN: '1101', OpeningStock: 25, MinStock: 10, CachedStock: 23, CurrentStock: 23, Active: 'TRUE', Description: 'Whole wheat flour 5kg pack' },
-        { ProductID: 'PRD-0002', SKU: 'DRY-AM-01', Barcode: '8901262010016', Name: 'Amul Taaza Toned Milk 1L Tetrapack', Category: 'Dairy & Beverages', Brand: 'Amul', Unit: 'Pack', PurchaseCost: 66, SellingPrice: 72, GSTRate: 5, HSN: '0401', OpeningStock: 40, MinStock: 15, CachedStock: 38, CurrentStock: 38, Active: 'TRUE', Description: 'UHT Treated Toned Milk 1L' },
-        { ProductID: 'PRD-0003', SKU: 'BEV-TT-500', Barcode: '8901058851234', Name: 'Tata Tea Gold 500g', Category: 'Dairy & Beverages', Brand: 'Tata', Unit: 'Pack', PurchaseCost: 235, SellingPrice: 280, GSTRate: 5, HSN: '0902', OpeningStock: 8, MinStock: 10, CachedStock: 8, CurrentStock: 8, Active: 'TRUE', Description: 'Assam tea with gently rolled aromatic long leaves' },
-        { ProductID: 'PRD-0004', SKU: 'SNK-MG-420', Barcode: '8901058000290', Name: 'Maggi 2-Minute Noodles 6-Pack (420g)', Category: 'Packaged Snacks', Brand: 'Nestle', Unit: 'Pack', PurchaseCost: 72, SellingPrice: 84, GSTRate: 12, HSN: '1902', OpeningStock: 30, MinStock: 12, CachedStock: 30, CurrentStock: 30, Active: 'TRUE', Description: 'Masala instant noodles family pack' },
-        { ProductID: 'PRD-0005', SKU: 'HHS-SX-01', Barcode: '8901030845215', Name: 'Surf Excel Easy Wash Detergent 1kg', Category: 'Household Supplies', Brand: 'HUL', Unit: 'Pack', PurchaseCost: 112, SellingPrice: 135, GSTRate: 18, HSN: '3402', OpeningStock: 6, MinStock: 10, CachedStock: 6, CurrentStock: 6, Active: 'TRUE', Description: 'Superfast stain removal detergent powder' }
+        { ProductID: 'PRD-0001', SKU: 'JWL-NK-01', Barcode: '8904001001011', Name: 'Kundan Pearl Bridal Choker Necklace Set', Category: 'Imitation Jewellery', Brand: 'Rang Creation', Unit: 'Set', PurchaseCost: 420, SellingPrice: 799, GSTRate: 3, HSN: '7117', OpeningStock: 15, MinStock: 5, CachedStock: 14, CurrentStock: 14, Active: 'TRUE', Description: 'Gold-plated Kundan choker with earrings & maang tikka' },
+        { ProductID: 'PRD-0002', SKU: 'JWL-ER-02', Barcode: '8904001001028', Name: 'Oxidised Silver Dome Jhumka Earrings', Category: 'Imitation Jewellery', Brand: 'Rang Creation', Unit: 'Pair', PurchaseCost: 65, SellingPrice: 149, GSTRate: 3, HSN: '7117', OpeningStock: 40, MinStock: 10, CachedStock: 40, CurrentStock: 40, Active: 'TRUE', Description: 'Traditional oxidised German silver jhumkas' },
+        { ProductID: 'PRD-0003', SKU: 'BNG-KD-01', Barcode: '8904002002017', Name: 'Velvet Silk Thread Kundan Bangle Set (24 Pcs)', Category: 'Bangles & Kada', Brand: 'Rang Creation', Unit: 'Set', PurchaseCost: 160, SellingPrice: 320, GSTRate: 3, HSN: '7117', OpeningStock: 25, MinStock: 8, CachedStock: 23, CurrentStock: 23, Active: 'TRUE', Description: 'Bridal Chuda & velvet bangle set Size 2.4 / 2.6' },
+        { ProductID: 'PRD-0004', SKU: 'BNG-RJ-02', Barcode: '8904002002024', Name: 'Antique Gold Plated Rajwadi Kada Pair', Category: 'Bangles & Kada', Brand: 'Rang Creation', Unit: 'Pair', PurchaseCost: 190, SellingPrice: 380, GSTRate: 3, HSN: '7117', OpeningStock: 18, MinStock: 6, CachedStock: 18, CurrentStock: 18, Active: 'TRUE', Description: 'Screw-open Meenakari work Rajwadi Kada pair' },
+        { ProductID: 'PRD-0005', SKU: 'HAR-CL-01', Barcode: '8904003003010', Name: 'Korean Matte Pastel Jumbo Hair Claw Clip', Category: 'Hair Accessories', Brand: 'GlamHair', Unit: 'Pcs', PurchaseCost: 28, SellingPrice: 69, GSTRate: 18, HSN: '9615', OpeningStock: 60, MinStock: 15, CachedStock: 60, CurrentStock: 60, Active: 'TRUE', Description: 'Non-slip Matte finish korean claw clips' },
+        { ProductID: 'PRD-0006', SKU: 'GFT-HM-01', Barcode: '8904004004013', Name: 'Festive Luxury Jewellery & Accessories Gift Hamper', Category: 'Gift Hampers', Brand: 'Rang Creation', Unit: 'Hamper', PurchaseCost: 550, SellingPrice: 1099, GSTRate: 18, HSN: '4202', OpeningStock: 10, MinStock: 4, CachedStock: 10, CurrentStock: 10, Active: 'TRUE', Description: 'Curated box with AD pendant set + scrunchies + claw clip' }
       ],
       customers: [
         { CustomerID: 'CUS-0001', Name: 'Walk-in Customer', Phone: '0000000000', Email: '', Address: 'Counter Sale', GSTIN: '', CreditLimit: 0, OpeningBalance: 0, CachedBalance: 0, Notes: 'Default counter customer', Active: 'TRUE' },
-        { CustomerID: 'CUS-0002', Name: 'Mehta Provision & Cafe', Phone: '9825011223', Email: 'mehtacafe@example.com', Address: '14, Sayajigunj, Vadodara', GSTIN: '24AAACM1234F1Z5', CreditLimit: 25000, OpeningBalance: 1200, CachedBalance: 1200, Notes: 'B2B Account', Active: 'TRUE' },
-        { CustomerID: 'CUS-0003', Name: 'Priya Desai', Phone: '9898044556', Email: 'priya.desai@example.com', Address: 'Vasna Road, Vadodara', GSTIN: '', CreditLimit: 5000, OpeningBalance: 0, CachedBalance: 151.2, Notes: 'Regular customer', Active: 'TRUE' }
+        { CustomerID: 'CUS-0002', Name: 'Nehaben Shah', Phone: '9825011223', Email: 'neha.shah@example.com', Address: 'Waghodia Road, Vadodara', GSTIN: '', CreditLimit: 15000, OpeningBalance: 0, CachedBalance: 659.2, Notes: 'Regular Jewellery & Bangle Customer', Active: 'TRUE' },
+        { CustomerID: 'CUS-0003', Name: 'Priya Bridal Studio', Phone: '9898044556', Email: 'priyabridal@example.com', Address: 'Alkapuri, Vadodara', GSTIN: '24AAACP1234F1Z5', CreditLimit: 25000, OpeningBalance: 0, CachedBalance: 0, Notes: 'Boutique & Bulk Hamper Account', Active: 'TRUE' }
       ],
       suppliers: [
-        { SupplierID: 'SUP-0001', Name: 'Gujarat FMCG Distributors Pvt Ltd', ContactPerson: 'Kiran Shah', Phone: '9824099887', Email: 'orders@gujaratfmcg.in', Address: 'GIDC Makarpura, Vadodara', GSTIN: '24AABCG5566H1Z2', PaymentTerms: 'Net 15', OpeningBalance: 4500, CachedBalance: 4500, Notes: 'ITC & HUL distributor', Active: 'TRUE' },
-        { SupplierID: 'SUP-0002', Name: 'Anand Dairy Agency', ContactPerson: 'Sureshbhai Patel', Phone: '9727033445', Email: 'ananddairy@example.com', Address: 'Ajwa Road, Vadodara', GSTIN: '24AAACF9876D1Z9', PaymentTerms: 'COD', OpeningBalance: 0, CachedBalance: 0, Notes: 'Dairy supplier', Active: 'TRUE' }
+        { SupplierID: 'SUP-0001', Name: 'Zaveri Bazaar Imitation Wholesalers', ContactPerson: 'Kiran Shah', Phone: '9824099887', Email: 'orders@zaveriwholesale.in', Address: 'Mandvi / Mumbai Wholesale Market', GSTIN: '24AABCG5566H1Z2', PaymentTerms: 'Net 15', OpeningBalance: 0, CachedBalance: 0, Notes: 'Kundan, AD Jewellery & Bangles supplier', Active: 'TRUE' },
+        { SupplierID: 'SUP-0002', Name: 'Royal Hair & Hamper Packaging Co.', ContactPerson: 'Sureshbhai Patel', Phone: '9727033445', Email: 'royalpack@example.com', Address: 'GIDC, Vadodara', GSTIN: '24AAACF9876D1Z9', PaymentTerms: 'COD', OpeningBalance: 0, CachedBalance: 0, Notes: 'Hair accessories & gift hamper boxes', Active: 'TRUE' }
       ],
       sales: [
-        { InvoiceID: 'INV-SEED-01', InvoiceNo: 'INV-2026-27-0001', Date: today, StoreID: 'STR-01', CustomerID: 'CUS-0001', CustomerName: 'Walk-in Customer', CustomerGSTIN: '', TaxType: 'INTRA', Subtotal: 490, DiscountTotal: 0, TaxableAmount: 490, CGST: 12.25, SGST: 12.25, IGST: 0, GrandTotal: 514.5, AmountPaid: 514.5, BalanceDue: 0, PaymentStatus: 'PAID', Status: 'COMPLETED', Notes: 'Counter bill', Operator: 'owner@shop.in' },
-        { InvoiceID: 'INV-SEED-02', InvoiceNo: 'INV-2026-27-0002', Date: today, StoreID: 'STR-01', CustomerID: 'CUS-0003', CustomerName: 'Priya Desai', CustomerGSTIN: '', TaxType: 'INTRA', Subtotal: 144, DiscountTotal: 0, TaxableAmount: 144, CGST: 3.6, SGST: 3.6, IGST: 0, GrandTotal: 151.2, AmountPaid: 0, BalanceDue: 151.2, PaymentStatus: 'UNPAID', Status: 'COMPLETED', Notes: 'Credit bill', Operator: 'owner@shop.in' }
+        { InvoiceID: 'INV-SEED-01', InvoiceNo: 'INV-2026-27-0001', Date: today, StoreID: 'STR-01', CustomerID: 'CUS-0001', CustomerName: 'Walk-in Customer', CustomerGSTIN: '', TaxType: 'INTRA', Subtotal: 799, DiscountTotal: 49, TaxableAmount: 750, CGST: 11.25, SGST: 11.25, IGST: 0, GrandTotal: 772.5, AmountPaid: 772.5, BalanceDue: 0, PaymentStatus: 'PAID', Status: 'COMPLETED', Notes: 'Counter bill with ₹49 Flat Discount', Operator: 'owner@rangcreation.in' },
+        { InvoiceID: 'INV-SEED-02', InvoiceNo: 'INV-2026-27-0002', Date: today, StoreID: 'STR-01', CustomerID: 'CUS-0002', CustomerName: 'Nehaben Shah', CustomerGSTIN: '', TaxType: 'INTRA', Subtotal: 640, DiscountTotal: 0, TaxableAmount: 640, CGST: 9.6, SGST: 9.6, IGST: 0, GrandTotal: 659.2, AmountPaid: 0, BalanceDue: 659.2, PaymentStatus: 'UNPAID', Status: 'COMPLETED', Notes: 'Given on Credit (Udhaar)', Operator: 'owner@rangcreation.in' }
       ],
       saleItems: [
-        { SaleItemID: 'INV-SEED-01-L1', InvoiceID: 'INV-SEED-01', InvoiceNo: 'INV-2026-27-0001', ProductID: 'PRD-0001', SKU: 'GRC-AT-05', ProductName: 'Aashirvaad Shudh Chakki Atta 5kg', HSN: '1101', Quantity: 2, UnitPrice: 245, Discount: 0, TaxableValue: 490, GSTRate: 5, CGST: 12.25, SGST: 12.25, IGST: 0, LineTotal: 514.5, UnitCostSnapshot: 215 },
-        { SaleItemID: 'INV-SEED-02-L1', InvoiceID: 'INV-SEED-02', InvoiceNo: 'INV-2026-27-0002', ProductID: 'PRD-0002', SKU: 'DRY-AM-01', ProductName: 'Amul Taaza Toned Milk 1L Tetrapack', HSN: '0401', Quantity: 2, UnitPrice: 72, Discount: 0, TaxableValue: 144, GSTRate: 5, CGST: 3.6, SGST: 3.6, IGST: 0, LineTotal: 151.2, UnitCostSnapshot: 66 }
+        { SaleItemID: 'INV-SEED-01-L1', InvoiceID: 'INV-SEED-01', InvoiceNo: 'INV-2026-27-0001', ProductID: 'PRD-0001', SKU: 'JWL-NK-01', ProductName: 'Kundan Pearl Bridal Choker Necklace Set', HSN: '7117', Quantity: 1, UnitPrice: 799, Discount: 49, TaxableValue: 750, GSTRate: 3, CGST: 11.25, SGST: 11.25, IGST: 0, LineTotal: 772.5, UnitCostSnapshot: 420 },
+        { SaleItemID: 'INV-SEED-02-L1', InvoiceID: 'INV-SEED-02', InvoiceNo: 'INV-2026-27-0002', ProductID: 'PRD-0003', SKU: 'BNG-KD-01', ProductName: 'Velvet Silk Thread Kundan Bangle Set (24 Pcs)', HSN: '7117', Quantity: 2, UnitPrice: 320, Discount: 0, TaxableValue: 640, GSTRate: 3, CGST: 9.6, SGST: 9.6, IGST: 0, LineTotal: 659.2, UnitCostSnapshot: 160 }
       ],
       salesReturns: [],
-      purchases: [
-        { PurchaseID: 'PUR-SEED-01', PONumber: 'PO-2026-27-0001', Date: today, SupplierID: 'SUP-0001', SupplierName: 'Gujarat FMCG Distributors Pvt Ltd', SupplierInvoiceNo: 'GFD/882', Status: 'ORDERED', Subtotal: 2350, TaxTotal: 117.5, GrandTotal: 2467.5, AmountPaid: 0, BalanceDue: 2467.5, Notes: 'Restock order for Tata Tea Gold', Operator: 'owner@shop.in' }
-      ],
-      purchaseItems: [
-        { PurchaseItemID: 'PUR-SEED-01-L1', PurchaseID: 'PUR-SEED-01', PONumber: 'PO-2026-27-0001', ProductID: 'PRD-0003', ProductName: 'Tata Tea Gold 500g', OrderedQty: 10, ReceivedQty: 0, DamagedQty: 0, UnitCost: 235, GSTRate: 5, TaxAmount: 117.5, LineTotal: 2467.5 }
-      ],
+      purchases: [],
+      purchaseItems: [],
       goodsReceipts: [],
       payments: [
-        { PaymentID: 'PAY-SEED-01', PaymentNo: 'PAY-2026-27-0001', Date: today, PartyType: 'CUSTOMER', PartyID: 'CUS-0001', PartyName: 'Walk-in Customer', PaymentType: 'INCOMING', PaymentMethod: 'UPI', Amount: 514.5, UnallocatedAmount: 0, ReferenceNo: 'UPI-41258963', Notes: 'POS Bill INV-2026-27-0001', Operator: 'owner@shop.in' }
+        { PaymentID: 'PAY-SEED-01', PaymentNo: 'PAY-2026-27-0001', Date: today, PartyType: 'CUSTOMER', PartyID: 'CUS-0001', PartyName: 'Walk-in Customer', PaymentType: 'INCOMING', PaymentMethod: 'UPI', Amount: 772.5, UnallocatedAmount: 0, ReferenceNo: 'UPI-918273', Notes: 'POS Bill INV-2026-27-0001', Operator: 'owner@rangcreation.in' }
       ],
       paymentAllocations: [
-        { AllocationID: 'ALC-01', PaymentID: 'PAY-SEED-01', Date: today, DocumentType: 'INVOICE', DocumentID: 'INV-SEED-01', DocumentNo: 'INV-2026-27-0001', AllocatedAmount: 514.5 }
+        { AllocationID: 'ALC-01', PaymentID: 'PAY-SEED-01', Date: today, DocumentType: 'INVOICE', DocumentID: 'INV-SEED-01', DocumentNo: 'INV-2026-27-0001', AllocatedAmount: 772.5 }
       ],
-      expenses: [
-        { ExpenseID: 'EXP-SEED-01', Date: today, Category: 'Utilities & Electricity', Description: 'Shop Electricity Bill & Packaging Carry Bags', Amount: 450, PaymentMethod: 'CASH', Payee: 'MGVCL / Local Vendor', ReferenceNo: 'BILL-109', IsInternalTransfer: 'FALSE', Notes: 'Paid from counter cash', Operator: 'owner@shop.in' }
-      ],
+      expenses: [],
       stockMovements: [
-        { MovementID: 'MOV-07', Timestamp: today + 'T10:15:00', ProductID: 'PRD-0002', SKU: 'DRY-AM-01', ProductName: 'Amul Taaza Toned Milk 1L Tetrapack', MovementType: 'SALE', QtyChange: -2, ReferenceDocID: 'INV-SEED-02', ReferenceDocNo: 'INV-2026-27-0002', Reason: 'POS Sale', Location: 'STR-01', Operator: 'owner@shop.in' },
-        { MovementID: 'MOV-06', Timestamp: today + 'T09:40:00', ProductID: 'PRD-0001', SKU: 'GRC-AT-05', ProductName: 'Aashirvaad Shudh Chakki Atta 5kg', MovementType: 'SALE', QtyChange: -2, ReferenceDocID: 'INV-SEED-01', ReferenceDocNo: 'INV-2026-27-0001', Reason: 'POS Sale', Location: 'STR-01', Operator: 'owner@shop.in' },
-        { MovementID: 'MOV-05', Timestamp: today + 'T08:00:00', ProductID: 'PRD-0005', SKU: 'HHS-SX-01', ProductName: 'Surf Excel Easy Wash Detergent 1kg', MovementType: 'OPENING_STOCK', QtyChange: 6, ReferenceDocID: 'PRD-0005', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
-        { MovementID: 'MOV-04', Timestamp: today + 'T08:00:00', ProductID: 'PRD-0004', SKU: 'SNK-MG-420', ProductName: 'Maggi 2-Minute Noodles 6-Pack (420g)', MovementType: 'OPENING_STOCK', QtyChange: 30, ReferenceDocID: 'PRD-0004', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
-        { MovementID: 'MOV-03', Timestamp: today + 'T08:00:00', ProductID: 'PRD-0003', SKU: 'BEV-TT-500', ProductName: 'Tata Tea Gold 500g', MovementType: 'OPENING_STOCK', QtyChange: 8, ReferenceDocID: 'PRD-0003', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
-        { MovementID: 'MOV-02', Timestamp: today + 'T08:00:00', ProductID: 'PRD-0002', SKU: 'DRY-AM-01', ProductName: 'Amul Taaza Toned Milk 1L Tetrapack', MovementType: 'OPENING_STOCK', QtyChange: 40, ReferenceDocID: 'PRD-0002', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
-        { MovementID: 'MOV-01', Timestamp: today + 'T08:00:00', ProductID: 'PRD-0001', SKU: 'GRC-AT-05', ProductName: 'Aashirvaad Shudh Chakki Atta 5kg', MovementType: 'OPENING_STOCK', QtyChange: 25, ReferenceDocID: 'PRD-0001', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' }
+        { MovementID: 'MOV-08', Timestamp: today + 'T11:15:00', ProductID: 'PRD-0003', SKU: 'BNG-KD-01', ProductName: 'Velvet Silk Thread Kundan Bangle Set (24 Pcs)', MovementType: 'SALE', QtyChange: -2, ReferenceDocID: 'INV-SEED-02', ReferenceDocNo: 'INV-2026-27-0002', Reason: 'POS Sale (Credit)', Location: 'STR-01', Operator: 'owner@rangcreation.in' },
+        { MovementID: 'MOV-07', Timestamp: today + 'T10:30:00', ProductID: 'PRD-0001', SKU: 'JWL-NK-01', ProductName: 'Kundan Pearl Bridal Choker Necklace Set', MovementType: 'SALE', QtyChange: -1, ReferenceDocID: 'INV-SEED-01', ReferenceDocNo: 'INV-2026-27-0001', Reason: 'POS Sale', Location: 'STR-01', Operator: 'owner@rangcreation.in' },
+        { MovementID: 'MOV-06', Timestamp: today + 'T09:00:00', ProductID: 'PRD-0006', SKU: 'GFT-HM-01', ProductName: 'Festive Luxury Jewellery & Accessories Gift Hamper', MovementType: 'OPENING_STOCK', QtyChange: 10, ReferenceDocID: 'PRD-0006', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
+        { MovementID: 'MOV-05', Timestamp: today + 'T09:00:00', ProductID: 'PRD-0005', SKU: 'HAR-CL-01', ProductName: 'Korean Matte Pastel Jumbo Hair Claw Clip', MovementType: 'OPENING_STOCK', QtyChange: 60, ReferenceDocID: 'PRD-0005', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
+        { MovementID: 'MOV-04', Timestamp: today + 'T09:00:00', ProductID: 'PRD-0004', SKU: 'BNG-RJ-02', ProductName: 'Antique Gold Plated Rajwadi Kada Pair', MovementType: 'OPENING_STOCK', QtyChange: 18, ReferenceDocID: 'PRD-0004', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
+        { MovementID: 'MOV-03', Timestamp: today + 'T09:00:00', ProductID: 'PRD-0003', SKU: 'BNG-KD-01', ProductName: 'Velvet Silk Thread Kundan Bangle Set (24 Pcs)', MovementType: 'OPENING_STOCK', QtyChange: 25, ReferenceDocID: 'PRD-0003', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
+        { MovementID: 'MOV-02', Timestamp: today + 'T09:00:00', ProductID: 'PRD-0002', SKU: 'JWL-ER-02', ProductName: 'Oxidised Silver Dome Jhumka Earrings', MovementType: 'OPENING_STOCK', QtyChange: 40, ReferenceDocID: 'PRD-0002', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' },
+        { MovementID: 'MOV-01', Timestamp: today + 'T09:00:00', ProductID: 'PRD-0001', SKU: 'JWL-NK-01', ProductName: 'Kundan Pearl Bridal Choker Necklace Set', MovementType: 'OPENING_STOCK', QtyChange: 15, ReferenceDocID: 'PRD-0001', ReferenceDocNo: 'OPENING', Reason: 'Initial stock', Location: 'STR-01', Operator: 'SYSTEM' }
       ],
       processedKeys: {}
     };
@@ -223,13 +210,18 @@ const ApiAdapter = (function () {
 
       case 'setupDatabase':
         localStorage.removeItem(STORAGE_SANDBOX_KEY);
-        return Promise.resolve({ message: 'Sandbox database reset and re-seeded with sample records.' });
+        return Promise.resolve({ message: 'Sandbox database reset and seeded for Rang Creation By Ekta.' });
 
       case 'saveProduct': {
         const sku = String(payload.SKU || '').trim().toUpperCase();
         if (!sku || !payload.Name) return Promise.reject(new Error('SKU and Product Name are required.'));
         const dup = db.products.find(p => p.SKU.toUpperCase() === sku && p.ProductID !== payload.ProductID);
         if (dup) return Promise.reject(new Error('Duplicate SKU: ' + sku + ' already exists.'));
+
+        const catName = String(payload.Category || 'Imitation Jewellery').trim();
+        if (catName && !db.categories.some(c => c.CategoryName.toLowerCase() === catName.toLowerCase())) {
+          db.categories.push({ CategoryID: 'CAT-0' + (db.categories.length + 1), CategoryName: catName, Active: 'TRUE' });
+        }
 
         if (payload.ProductID) {
           const idx = db.products.findIndex(p => p.ProductID === payload.ProductID);
@@ -239,7 +231,7 @@ const ApiAdapter = (function () {
             SKU: sku,
             Barcode: payload.Barcode || '',
             Name: payload.Name,
-            Category: payload.Category,
+            Category: catName,
             Brand: payload.Brand || '',
             Unit: payload.Unit || 'Pcs',
             PurchaseCost: r2(payload.PurchaseCost),
@@ -258,7 +250,7 @@ const ApiAdapter = (function () {
             SKU: sku,
             Barcode: payload.Barcode || '',
             Name: payload.Name,
-            Category: payload.Category || 'Groceries & Staples',
+            Category: catName,
             Brand: payload.Brand || '',
             Unit: payload.Unit || 'Pcs',
             PurchaseCost: r2(payload.PurchaseCost),
@@ -306,8 +298,8 @@ const ApiAdapter = (function () {
           const openQty = r2(r.OpeningStock || 0);
           db.products.push({
             ProductID: newId, SKU: sku, Barcode: r.Barcode || '', Name: r.Name,
-            Category: r.Category || 'Groceries & Staples', Brand: r.Brand || '', Unit: r.Unit || 'Pcs',
-            PurchaseCost: r2(r.PurchaseCost), SellingPrice: r2(r.SellingPrice), GSTRate: r2(r.GSTRate || 5),
+            Category: r.Category || 'Imitation Jewellery', Brand: r.Brand || '', Unit: r.Unit || 'Pcs',
+            PurchaseCost: r2(r.PurchaseCost), SellingPrice: r2(r.SellingPrice), GSTRate: r2(r.GSTRate !== undefined ? r.GSTRate : 3),
             HSN: r.HSN || '', OpeningStock: openQty, MinStock: r2(r.MinStock || 5),
             CachedStock: openQty, CurrentStock: openQty, Active: 'TRUE', Description: r.Description || ''
           });
@@ -356,8 +348,8 @@ const ApiAdapter = (function () {
         const taxType = payload.TaxType === 'IGST' ? 'IGST' : 'INTRA';
         const customer = db.customers.find(c => c.CustomerID === payload.CustomerID) || db.customers[0];
 
-        let subtotal = 0, discountTotal = 0, taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
-        const lines = [];
+        let subtotal = 0, lineDiscountTotal = 0;
+        const prelim = [];
 
         for (const item of items) {
           const prod = db.products.find(p => p.ProductID === item.ProductID);
@@ -368,24 +360,41 @@ const ApiAdapter = (function () {
           }
           const price = r2(prod.SellingPrice);
           const gross = r2(qty * price);
-          const disc = Math.min(gross, Math.max(0, r2(item.Discount || 0)));
-          const taxable = r2(gross - disc);
-          const gst = r2(prod.GSTRate || 0);
+          const lDisc = Math.min(gross, Math.max(0, r2(item.Discount || 0)));
+          const netAfterLine = r2(gross - lDisc);
+          subtotal = r2(subtotal + gross);
+          lineDiscountTotal = r2(lineDiscountTotal + lDisc);
+          prelim.push({ prod, qty, price, gross, lDisc, netAfterLine });
+        }
+
+        const baseAfterLine = Math.max(0, r2(subtotal - lineDiscountTotal));
+        const invDiscType = String(payload.InvoiceDiscountType || 'FLAT').toUpperCase();
+        const invDiscVal = Math.max(0, Number(payload.InvoiceDiscountValue || 0));
+        const invDiscAmt = invDiscType === 'PERCENT'
+          ? r2(baseAfterLine * (Math.min(100, invDiscVal) / 100))
+          : Math.min(baseAfterLine, r2(invDiscVal));
+
+        const discountTotal = r2(lineDiscountTotal + invDiscAmt);
+        let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
+        const lines = [];
+
+        prelim.forEach(pl => {
+          const share = baseAfterLine > 0 ? r2(invDiscAmt * (pl.netAfterLine / baseAfterLine)) : 0;
+          const totalDisc = r2(pl.lDisc + share);
+          const taxable = Math.max(0, r2(pl.gross - totalDisc));
+          const gst = r2(pl.prod.GSTRate || 0);
           const tax = r2(taxable * (gst / 100));
           let cgst = 0, sgst = 0, igst = 0;
           if (taxType === 'IGST') igst = tax;
           else { cgst = r2(tax / 2); sgst = r2(tax - cgst); }
           const lineTotal = r2(taxable + cgst + sgst + igst);
 
-          subtotal = r2(subtotal + gross);
-          discountTotal = r2(discountTotal + disc);
           taxableTotal = r2(taxableTotal + taxable);
           cgstTotal = r2(cgstTotal + cgst);
           sgstTotal = r2(sgstTotal + sgst);
           igstTotal = r2(igstTotal + igst);
-
-          lines.push({ prod, qty, price, disc, taxable, gst, cgst, sgst, igst, lineTotal });
-        }
+          lines.push({ prod: pl.prod, qty: pl.qty, price: pl.price, disc: totalDisc, taxable, gst, cgst, sgst, igst, lineTotal });
+        });
 
         const grandTotal = r2(taxableTotal + cgstTotal + sgstTotal + igstTotal);
         const paymentsInput = Array.isArray(payload.payments) && payload.payments.length > 0
@@ -397,7 +406,7 @@ const ApiAdapter = (function () {
         const balanceDue = r2(grandTotal - appliedPaid);
 
         if (balanceDue > 0 && customer.CustomerID === 'CUS-0001') {
-          return Promise.reject(new Error('Walk-in Customer cannot have an unpaid balance. Select or add a registered customer.'));
+          return Promise.reject(new Error('Walk-in Customer cannot take goods on Credit. Please select or add a customer.'));
         }
 
         const invNo = `INV-${db.settings.FINANCIAL_YEAR || '2026-27'}-${String(db.sales.length + 1).padStart(4, '0')}`;
@@ -584,13 +593,15 @@ const ApiAdapter = (function () {
         if (payload[idCol]) {
           const idx = list.findIndex(x => x[idCol] === payload[idCol]);
           if (idx !== -1) list[idx] = { ...list[idx], ...payload };
+          saveSandboxDB(db);
+          return Promise.resolve({ id: payload[idCol], message: 'Saved.' });
         } else {
           const newId = (isSup ? 'SUP-' : 'CUS-') + String(list.length + 1).padStart(4, '0');
           const openBal = r2(payload.OpeningBalance || 0);
           list.push({ ...payload, [idCol]: newId, OpeningBalance: openBal, CachedBalance: openBal, Active: 'TRUE' });
+          saveSandboxDB(db);
+          return Promise.resolve({ id: newId, message: 'Saved.' });
         }
-        saveSandboxDB(db);
-        return Promise.resolve({ message: 'Saved.' });
       }
 
       case 'recordPayment': {

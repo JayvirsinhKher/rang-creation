@@ -1,5 +1,6 @@
 /**
  * RETAIL MANAGEMENT SYSTEM - MAIN APPLICATION CONTROLLER (app.js)
+ * Configured for: Rang Creation By Ekta
  */
 
 const AppState = {
@@ -8,6 +9,9 @@ const AppState = {
   posCart: [],
   posDrafts: JSON.parse(localStorage.getItem('RMS_POS_DRAFTS') || '[]'),
   posSplitPayments: [{ method: 'CASH', amount: 0, reference: '' }],
+  posInvoiceDiscountType: 'FLAT', // 'FLAT' (₹) or 'PERCENT' (%)
+  posInvoiceDiscountValue: 0,
+  posCreditMode: 'FULL_PAY', // 'FULL_PAY', 'PARTIAL', or 'FULL_CREDIT'
   lastReportCSV: { filename: 'report.csv', content: '' },
   isSubmitting: false
 };
@@ -76,7 +80,7 @@ function showToast(message, type = 'success') {
   el.className = `toast ${type}`;
   el.textContent = message;
   container.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => el.remove(), 4500);
 }
 
 function openModal(title, bodyHtml) {
@@ -140,7 +144,7 @@ function updateTopbarStatus() {
   if (!AppState.bundle) return;
   const shopEl = document.getElementById('topbar-shop-name');
   const modeEl = document.getElementById('topbar-conn-badge');
-  if (shopEl) shopEl.textContent = AppState.bundle.settings.SHOP_NAME || 'Retail Management System';
+  if (shopEl) shopEl.textContent = AppState.bundle.settings.SHOP_NAME || 'Rang Creation By Ekta';
   if (modeEl) {
     if (ApiAdapter.isNativeAppsScript()) {
       modeEl.textContent = 'Google Sheets Live (HtmlService)';
@@ -237,12 +241,12 @@ function renderDashboard(container) {
       <div class="kpi-card">
         <div class="kpi-label">Current Stock Valuation</div>
         <div class="kpi-value">${fmtINR(stockValuation)}</div>
-        <div class="kpi-sub">${b.products.length} total products (${lowStockProducts.length} low stock)</div>
+        <div class="kpi-sub">${b.products.length} total items (${lowStockProducts.length} low stock)</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Customer Outstanding</div>
+        <div class="kpi-label">Customer Credit (Udhaar)</div>
         <div class="kpi-value" style="color:var(--warning)">${fmtINR(custReceivables)}</div>
-        <div class="kpi-sub">Receivables to collect</div>
+        <div class="kpi-sub">Pending customer dues</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Supplier Outstanding</div>
@@ -255,9 +259,9 @@ function renderDashboard(container) {
         <div class="kpi-sub">Excludes bank/cash transfers</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Quick POS Action</div>
+        <div class="kpi-label">Quick Billing</div>
         <div style="margin-top:8px;">
-          <button class="btn btn-primary" onclick="switchView('pos')" style="width:100%;">+ New Counter Bill</button>
+          <button class="btn btn-primary" onclick="switchView('pos')" style="width:100%;">+ New Counter / Credit Bill</button>
         </div>
       </div>
     </div>
@@ -266,12 +270,12 @@ function renderDashboard(container) {
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Recent Sales Invoices</span>
-          <button class="btn btn-secondary btn-sm" onclick="switchView('invoices')">View All</button>
+          <button class="btn btn-secondary btn-sm" onclick="switchView('invoices')">View All / Collect Due</button>
         </div>
         <div class="table-responsive">
           <table>
             <thead>
-              <tr><th>Invoice No</th><th>Date</th><th>Customer</th><th>Total</th><th>Status</th></tr>
+              <tr><th>Invoice No</th><th>Date</th><th>Customer</th><th>Total</th><th>Due</th><th>Status</th></tr>
             </thead>
             <tbody>
               ${b.sales.slice(0, 6).map(s => `
@@ -280,9 +284,10 @@ function renderDashboard(container) {
                   <td>${fmtDate(s.Date)}</td>
                   <td>${esc(s.CustomerName)}</td>
                   <td>${fmtINR(s.GrandTotal)}</td>
-                  <td><span class="badge ${s.PaymentStatus === 'PAID' ? 'badge-success' : 'badge-warning'}">${esc(s.PaymentStatus)}</span></td>
+                  <td style="color:${Number(s.BalanceDue) > 0 ? 'var(--danger)' : 'var(--text-muted)'};font-weight:600;">${fmtINR(s.BalanceDue)}</td>
+                  <td><span class="badge ${s.PaymentStatus === 'PAID' ? 'badge-success' : s.PaymentStatus === 'PARTIAL' ? 'badge-warning' : 'badge-danger'}">${esc(s.PaymentStatus)}</span></td>
                 </tr>
-              `).join('') || '<tr><td colspan="5">No sales recorded yet.</td></tr>'}
+              `).join('') || '<tr><td colspan="6">No sales recorded yet.</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -320,7 +325,11 @@ function renderDashboard(container) {
  */
 function renderProducts(container) {
   const b = AppState.bundle;
-  const categories = b.categories.map(c => c.CategoryName);
+  const categories = Array.from(new Set([
+    'Imitation Jewellery', 'Bangles & Kada', 'Hair Accessories', 'Gift Hampers', 'Bridal Sets & Packaging',
+    ...b.categories.map(c => c.CategoryName),
+    ...b.products.map(p => p.Category)
+  ])).filter(Boolean);
 
   container.innerHTML = `
     <div class="panel">
@@ -353,7 +362,7 @@ function renderProducts(container) {
             <thead>
               <tr>
                 <th>SKU / Barcode</th>
-                <th>Product Name</th>
+                <th>Item Name</th>
                 <th>Category</th>
                 <th>Cost</th>
                 <th>Selling Price</th>
@@ -416,7 +425,10 @@ function filterProductTable() {
 function openProductModal(productId = '') {
   const p = AppState.bundle.products.find(x => x.ProductID === productId) || {};
   const isEdit = Boolean(productId);
-  const cats = AppState.bundle.categories.map(c => c.CategoryName);
+  const cats = Array.from(new Set([
+    'Imitation Jewellery', 'Bangles & Kada', 'Hair Accessories', 'Gift Hampers', 'Bridal Sets & Packaging',
+    ...AppState.bundle.categories.map(c => c.CategoryName)
+  ])).filter(Boolean);
 
   openModal(isEdit ? `Edit Product (${p.SKU})` : 'Add New Product', `
     <form id="product-form" onsubmit="submitProductForm(event)">
@@ -424,15 +436,15 @@ function openProductModal(productId = '') {
       <div class="form-grid">
         <div class="form-group">
           <label>SKU (Unique Code) *</label>
-          <input type="text" name="SKU" required value="${esc(p.SKU || '')}" placeholder="e.g. GRC-AT-05">
+          <input type="text" name="SKU" required value="${esc(p.SKU || '')}" placeholder="e.g. JWL-NK-01">
         </div>
         <div class="form-group">
           <label>Barcode (EAN/UPC)</label>
-          <input type="text" name="Barcode" value="${esc(p.Barcode || '')}" placeholder="8901...">
+          <input type="text" name="Barcode" value="${esc(p.Barcode || '')}" placeholder="8904...">
         </div>
         <div class="form-group">
           <label>Product Name *</label>
-          <input type="text" name="Name" required value="${esc(p.Name || '')}">
+          <input type="text" name="Name" required value="${esc(p.Name || '')}" placeholder="e.g. Kundan Bridal Necklace Set">
         </div>
         <div class="form-group">
           <label>Category *</label>
@@ -441,13 +453,13 @@ function openProductModal(productId = '') {
           </select>
         </div>
         <div class="form-group">
-          <label>Brand</label>
-          <input type="text" name="Brand" value="${esc(p.Brand || '')}">
+          <label>Brand / Collection</label>
+          <input type="text" name="Brand" value="${esc(p.Brand || 'Rang Creation')}">
         </div>
         <div class="form-group">
           <label>Unit of Measurement</label>
           <select name="Unit">
-            ${['Pcs', 'Pack', 'Bag', 'Kg', 'Ltr', 'Box'].map(u => `<option value="${u}" ${p.Unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+            ${['Pcs', 'Pair', 'Set', 'Dozen', 'Hamper', 'Box', 'Pack'].map(u => `<option value="${u}" ${p.Unit === u ? 'selected' : ''}>${u}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
@@ -461,21 +473,21 @@ function openProductModal(productId = '') {
         <div class="form-group">
           <label>GST Rate (%)</label>
           <select name="GSTRate">
-            ${[0, 5, 12, 18, 28].map(g => `<option value="${g}" ${Number(p.GSTRate ?? 5) === g ? 'selected' : ''}>${g}%</option>`).join('')}
+            ${[0, 3, 5, 12, 18, 28].map(g => `<option value="${g}" ${Number(p.GSTRate ?? 3) === g ? 'selected' : ''}>${g}%</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
-          <label>HSN / SAC Code</label>
-          <input type="text" name="HSN" value="${esc(p.HSN || '')}">
+          <label>HSN / SAC Code (7117 = Jewellery)</label>
+          <input type="text" name="HSN" value="${esc(p.HSN || '7117')}">
         </div>
         ${!isEdit ? `
         <div class="form-group">
           <label>Opening Stock Quantity</label>
-          <input type="number" step="0.01" name="OpeningStock" value="0">
+          <input type="number" step="1" name="OpeningStock" value="10">
         </div>` : ''}
         <div class="form-group">
           <label>Minimum Stock Alert Level</label>
-          <input type="number" step="0.01" name="MinStock" value="${esc(p.MinStock ?? 5)}">
+          <input type="number" step="1" name="MinStock" value="${esc(p.MinStock ?? 5)}">
         </div>
         <div class="form-group">
           <label>Status</label>
@@ -486,7 +498,7 @@ function openProductModal(productId = '') {
         </div>
       </div>
       <div class="form-group">
-        <label>Description</label>
+        <label>Description / Size / Polish Details</label>
         <textarea name="Description" rows="2">${esc(p.Description || '')}</textarea>
       </div>
       <div class="modal-footer" style="padding:12px 0 0 0;">
@@ -520,7 +532,7 @@ async function submitProductForm(e) {
 function exportProductsCSV() {
   const headers = ['SKU', 'Barcode', 'Name', 'Category', 'Brand', 'Unit', 'PurchaseCost', 'SellingPrice', 'GSTRate', 'HSN', 'CurrentStock', 'MinStock'];
   const rows = AppState.bundle.products.map(p => headers.map(h => csvSafeCell(p[h])).join(','));
-  downloadCSV('products-catalog.csv', [headers.join(','), ...rows].join('\n'));
+  downloadCSV('rang-creation-products.csv', [headers.join(','), ...rows].join('\n'));
 }
 
 async function handleProductCSVImport(event) {
@@ -620,11 +632,11 @@ function openStockAdjustmentModal() {
       </div>
       <div class="form-group">
         <label>Quantity Change (+ for addition, - for reduction/damage) *</label>
-        <input type="number" step="0.01" name="QtyChange" required placeholder="e.g. -2 or +5">
+        <input type="number" step="1" name="QtyChange" required placeholder="e.g. -1 or +5">
       </div>
       <div class="form-group">
         <label>Reason for Adjustment *</label>
-        <input type="text" name="Reason" required placeholder="e.g. Damaged packaging during shelf restock">
+        <input type="text" name="Reason" required placeholder="e.g. Stone/polish damage or stock count update">
       </div>
       <div class="modal-footer" style="padding:12px 0 0 0;">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -665,7 +677,7 @@ async function triggerInventoryReconcile() {
 }
 
 /**
- * 4. SALES & POINT OF SALE (POS) MODULE
+ * 4. SALES & POINT OF SALE (POS) MODULE (With Flat/% Invoice Discount & Credit/Udhaar Mode)
  */
 function renderPOS(container) {
   const b = AppState.bundle;
@@ -673,12 +685,12 @@ function renderPOS(container) {
     <div class="pos-layout">
       <div class="panel">
         <div class="panel-header">
-          <span class="panel-title">Product Catalog &amp; Barcode Scanner</span>
+          <span class="panel-title">Jewellery, Bangles, Hair Accessories &amp; Hampers</span>
           <span class="badge badge-info">${AppState.posDrafts.length} Saved Drafts</span>
         </div>
         <div class="panel-body">
           <div style="display:flex;gap:8px;">
-            <input type="text" id="pos-search-input" placeholder="Scan Barcode or type SKU / Product Name (Press Enter)..." style="flex:1;" oninput="renderPOSCatalog()" onkeydown="handlePOSBarcodeEnter(event)">
+            <input type="text" id="pos-search-input" placeholder="Scan Barcode or type SKU / Item Name (Press Enter)..." style="flex:1;" oninput="renderPOSCatalog()" onkeydown="handlePOSBarcodeEnter(event)">
           </div>
           <div id="pos-catalog-grid" class="pos-product-grid"></div>
         </div>
@@ -696,9 +708,12 @@ function renderPOS(container) {
         <div class="panel-body">
           <div class="form-grid" style="margin-bottom:12px;">
             <div class="form-group">
-              <label>Customer</label>
-              <select id="pos-customer-select">
-                ${b.customers.map(c => `<option value="${esc(c.CustomerID)}">${esc(c.Name)} (${esc(c.Phone)})</option>`).join('')}
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <label>Customer (Select Customer for Credit)</label>
+                <button type="button" class="btn btn-secondary btn-sm" style="padding:1px 6px;font-size:11px;" onclick="openQuickPOSCustomerModal()">+ New Customer</button>
+              </div>
+              <select id="pos-customer-select" onchange="renderPOSCart()">
+                ${b.customers.map(c => `<option value="${esc(c.CustomerID)}">${esc(c.Name)} (${esc(c.Phone)})${Number(c.CachedBalance) > 0 ? ' — Due: ' + fmtINR(c.CachedBalance) : ''}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -710,21 +725,36 @@ function renderPOS(container) {
             </div>
           </div>
 
-          <div class="table-responsive" style="max-height:260px;overflow-y:auto;margin-bottom:12px;">
+          <div class="table-responsive" style="max-height:240px;overflow-y:auto;margin-bottom:12px;">
             <table>
               <thead>
-                <tr><th>Item</th><th>Qty</th><th>Price</th><th>Disc(₹)</th><th>Total</th><th></th></tr>
+                <tr><th>Item</th><th>Qty</th><th>Price</th><th>Item Disc(₹)</th><th>Total</th><th></th></tr>
               </thead>
               <tbody id="pos-cart-tbody"></tbody>
             </table>
           </div>
 
+          <!-- Invoice-Level Discount Bar (Flat ₹ or %) -->
+          <div style="display:flex;gap:8px;align-items:center;background:#eff6ff;padding:8px 12px;border-radius:6px;border:1px solid #bfdbfe;margin-bottom:10px;">
+            <label style="margin:0;flex:1;color:#1e40af;">Invoice-Level Discount:</label>
+            <select id="pos-inv-disc-type" style="width:135px;padding:5px 8px;" onchange="updatePOSInvoiceDiscount()">
+              <option value="FLAT" ${AppState.posInvoiceDiscountType === 'FLAT' ? 'selected' : ''}>Flat Amount (₹)</option>
+              <option value="PERCENT" ${AppState.posInvoiceDiscountType === 'PERCENT' ? 'selected' : ''}>Percentage (%)</option>
+            </select>
+            <input type="number" id="pos-inv-disc-val" step="0.5" min="0" value="${esc(AppState.posInvoiceDiscountValue)}" style="width:95px;padding:5px 8px;" oninput="updatePOSInvoiceDiscount()">
+          </div>
+
           <div id="pos-totals-box" style="background:#f8fafc;padding:12px;border-radius:6px;border:1px solid var(--border);margin-bottom:12px;"></div>
 
+          <!-- Payment & Credit (Udhaar) Mode Selector -->
           <div style="margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <label>Payment Tender (Supports Split / Partial Payments)</label>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="addPOSSplitPaymentRow()">+ Add Split Method</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+              <label style="margin:0;">Settlement Mode:</label>
+              <div style="display:flex;gap:4px;">
+                <button type="button" class="btn btn-sm ${AppState.posCreditMode === 'FULL_PAY' ? 'btn-primary' : 'btn-secondary'}" onclick="setPOSCreditMode('FULL_PAY')">Full Payment</button>
+                <button type="button" class="btn btn-sm ${AppState.posCreditMode === 'PARTIAL' ? 'btn-primary' : 'btn-secondary'}" onclick="setPOSCreditMode('PARTIAL')">Part Pay + Credit</button>
+                <button type="button" class="btn btn-sm ${AppState.posCreditMode === 'FULL_CREDIT' ? 'btn-danger' : 'btn-secondary'}" onclick="setPOSCreditMode('FULL_CREDIT')">Full Credit (Udhaar)</button>
+              </div>
             </div>
             <div id="pos-payments-container"></div>
           </div>
@@ -740,6 +770,81 @@ function renderPOS(container) {
   renderPOSCart();
 }
 
+function updatePOSInvoiceDiscount() {
+  const typeEl = document.getElementById('pos-inv-disc-type');
+  const valEl = document.getElementById('pos-inv-disc-val');
+  AppState.posInvoiceDiscountType = typeEl ? typeEl.value : 'FLAT';
+  AppState.posInvoiceDiscountValue = Math.max(0, Number(valEl ? valEl.value : 0));
+  syncPOSDefaultPaymentAmount();
+  renderPOSCart();
+}
+
+function setPOSCreditMode(mode) {
+  const currentCust = document.getElementById('pos-customer-select')?.value || 'CUS-0001';
+  AppState.posCreditMode = mode;
+  const totals = calculatePOSCartTotals();
+  if (mode === 'FULL_CREDIT') {
+    AppState.posSplitPayments = [{ method: 'CASH', amount: 0, reference: 'ON CREDIT (UDHAAR)' }];
+    if (currentCust === 'CUS-0001') {
+      showToast('Select a registered customer or click "+ New Customer" for Credit/Udhaar bills.', 'warning');
+    }
+  } else if (mode === 'FULL_PAY') {
+    AppState.posSplitPayments = [{ method: AppState.posSplitPayments[0]?.method || 'CASH', amount: totals.grandTotal, reference: '' }];
+  }
+  renderPOS(document.getElementById('view-container'));
+  const sel = document.getElementById('pos-customer-select');
+  if (sel) sel.value = currentCust;
+}
+
+function openQuickPOSCustomerModal() {
+  openModal('Quick Add Customer for Credit / Billing', `
+    <form onsubmit="submitQuickPOSCustomer(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Customer Name *</label>
+          <input type="text" name="Name" required placeholder="e.g. Nehaben Shah">
+        </div>
+        <div class="form-group">
+          <label>Mobile Number *</label>
+          <input type="text" name="Phone" required placeholder="98250...">
+        </div>
+        <div class="form-group">
+          <label>Credit Limit (₹)</label>
+          <input type="number" name="CreditLimit" value="15000">
+        </div>
+        <div class="form-group">
+          <label>Address / Area</label>
+          <input type="text" name="Address" placeholder="Vadodara">
+        </div>
+      </div>
+      <div class="modal-footer" style="padding:12px 0 0 0;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save &amp; Select Customer</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitQuickPOSCustomer(e) {
+  e.preventDefault();
+  showLoader(true);
+  try {
+    const payload = { ...Object.fromEntries(new FormData(e.target).entries()), partyType: 'CUSTOMER' };
+    const res = await ApiAdapter.request('saveParty', payload);
+    closeModal();
+    await refreshBundle();
+    const sel = document.getElementById('pos-customer-select');
+    if (sel && res && res.id) {
+      sel.value = res.id;
+    }
+    showToast('Customer added and selected for billing.');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    showLoader(false);
+  }
+}
+
 function renderPOSCatalog() {
   const q = (document.getElementById('pos-search-input')?.value || '').trim().toLowerCase();
   const grid = document.getElementById('pos-catalog-grid');
@@ -749,13 +854,14 @@ function renderPOSCatalog() {
     !q ||
     String(p.Name).toLowerCase().includes(q) ||
     String(p.SKU).toLowerCase().includes(q) ||
-    String(p.Barcode).toLowerCase().includes(q)
+    String(p.Barcode).toLowerCase().includes(q) ||
+    String(p.Category).toLowerCase().includes(q)
   ));
 
   grid.innerHTML = activeProds.map(p => `
     <div class="pos-item-card" onclick="addProductToPOSCart('${esc(p.ProductID)}')">
       <div>
-        <div style="font-size:11px;color:var(--text-muted);">${esc(p.SKU)}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${esc(p.SKU)} • ${esc(p.Category)}</div>
         <div style="font-weight:600;margin:4px 0;">${esc(p.Name)}</div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
@@ -835,33 +941,65 @@ function removePOSCartItem(idx) {
 
 function clearPOSCart() {
   AppState.posCart = [];
+  AppState.posInvoiceDiscountValue = 0;
+  AppState.posCreditMode = 'FULL_PAY';
   AppState.posSplitPayments = [{ method: 'CASH', amount: 0, reference: '' }];
   renderPOSCart();
 }
 
 function calculatePOSCartTotals() {
   const taxType = document.getElementById('pos-tax-type')?.value || 'INTRA';
-  let subtotal = 0, discountTotal = 0, taxableTotal = 0, cgst = 0, sgst = 0, igst = 0;
+  let subtotal = 0;
+  let lineDiscountTotal = 0;
 
-  AppState.posCart.forEach(item => {
+  const linesAfterLineDisc = AppState.posCart.map(item => {
     const gross = item.Quantity * item.UnitPrice;
-    const disc = Math.min(gross, item.Discount || 0);
-    const taxable = gross - disc;
-    const tax = taxable * (item.GSTRate / 100);
+    const lDisc = Math.min(gross, Math.max(0, Number(item.Discount || 0)));
+    const netAfterLine = gross - lDisc;
     subtotal += gross;
-    discountTotal += disc;
+    lineDiscountTotal += lDisc;
+    return { ...item, gross, lDisc, netAfterLine };
+  });
+
+  const baseForInvDisc = Math.max(0, subtotal - lineDiscountTotal);
+  let invDiscountAmount = 0;
+  if (AppState.posInvoiceDiscountType === 'PERCENT') {
+    const pct = Math.min(100, Math.max(0, Number(AppState.posInvoiceDiscountValue || 0)));
+    invDiscountAmount = Math.round((baseForInvDisc * (pct / 100)) * 100) / 100;
+  } else {
+    invDiscountAmount = Math.min(baseForInvDisc, Math.max(0, Number(AppState.posInvoiceDiscountValue || 0)));
+  }
+
+  let taxableTotal = 0, cgst = 0, sgst = 0, igst = 0;
+  linesAfterLineDisc.forEach(l => {
+    const share = baseForInvDisc > 0 ? (invDiscountAmount * (l.netAfterLine / baseForInvDisc)) : 0;
+    const taxable = Math.max(0, l.netAfterLine - share);
+    const tax = taxable * (l.GSTRate / 100);
     taxableTotal += taxable;
     if (taxType === 'IGST') igst += tax;
     else { cgst += tax / 2; sgst += tax / 2; }
   });
 
+  const discountTotal = Math.round((lineDiscountTotal + invDiscountAmount) * 100) / 100;
   const grandTotal = Math.round((taxableTotal + cgst + sgst + igst) * 100) / 100;
-  return { subtotal, discountTotal, taxableTotal, cgst, sgst, igst, grandTotal };
+  return {
+    subtotal,
+    lineDiscountTotal,
+    invDiscountAmount,
+    discountTotal,
+    taxableTotal,
+    cgst,
+    sgst,
+    igst,
+    grandTotal
+  };
 }
 
 function syncPOSDefaultPaymentAmount() {
   const totals = calculatePOSCartTotals();
-  if (AppState.posSplitPayments.length === 1) {
+  if (AppState.posCreditMode === 'FULL_CREDIT') {
+    AppState.posSplitPayments = [{ method: 'CASH', amount: 0, reference: 'ON CREDIT (UDHAAR)' }];
+  } else if (AppState.posCreditMode === 'FULL_PAY' && AppState.posSplitPayments.length === 1) {
     AppState.posSplitPayments[0].amount = totals.grandTotal;
   }
 }
@@ -873,26 +1011,30 @@ function renderPOSCart() {
   if (!tbody || !totalsBox || !payBox) return;
 
   tbody.innerHTML = AppState.posCart.map((item, idx) => {
-    const lineNet = (item.Quantity * item.UnitPrice - item.Discount) * (1 + item.GSTRate / 100);
+    const lineNet = Math.max(0, item.Quantity * item.UnitPrice - item.Discount) * (1 + item.GSTRate / 100);
     return `
       <tr>
         <td><strong>${esc(item.Name)}</strong><br><small>GST ${esc(item.GSTRate)}%</small></td>
-        <td><input type="number" step="1" min="1" value="${esc(item.Quantity)}" style="width:62px;" onchange="updatePOSCartItem(${idx}, 'Quantity', this.value)"></td>
+        <td><input type="number" step="1" min="1" value="${esc(item.Quantity)}" style="width:60px;" onchange="updatePOSCartItem(${idx}, 'Quantity', this.value)"></td>
         <td>${fmtINR(item.UnitPrice)}</td>
-        <td><input type="number" step="0.5" min="0" value="${esc(item.Discount)}" style="width:68px;" onchange="updatePOSCartItem(${idx}, 'Discount', this.value)"></td>
+        <td><input type="number" step="1" min="0" value="${esc(item.Discount)}" style="width:65px;" onchange="updatePOSCartItem(${idx}, 'Discount', this.value)"></td>
         <td><strong>${fmtINR(lineNet)}</strong></td>
         <td><button class="btn btn-danger btn-sm" onclick="removePOSCartItem(${idx})">×</button></td>
       </tr>
     `;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Scan or click products to add to bill.</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Scan or click items to add to bill.</td></tr>';
 
   const t = calculatePOSCartTotals();
   const tendered = AppState.posSplitPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
   const balance = Math.max(0, Math.round((t.grandTotal - tendered) * 100) / 100);
 
   totalsBox.innerHTML = `
+    <div style="display:flex;justify-content:space-between;"><span>Gross Subtotal:</span><span>${fmtINR(t.subtotal)}</span></div>
+    <div style="display:flex;justify-content:space-between;color:var(--success);">
+      <span>Total Discount (Items + Bill ${AppState.posInvoiceDiscountType === 'PERCENT' ? AppState.posInvoiceDiscountValue + '%' : 'Flat'}):</span>
+      <span>-${fmtINR(t.discountTotal)}</span>
+    </div>
     <div style="display:flex;justify-content:space-between;"><span>Taxable Value:</span><span>${fmtINR(t.taxableTotal)}</span></div>
-    <div style="display:flex;justify-content:space-between;"><span>Discount:</span><span>-${fmtINR(t.discountTotal)}</span></div>
     ${t.igst > 0
       ? `<div style="display:flex;justify-content:space-between;"><span>IGST:</span><span>${fmtINR(t.igst)}</span></div>`
       : `<div style="display:flex;justify-content:space-between;"><span>CGST + SGST:</span><span>${fmtINR(t.cgst)} + ${fmtINR(t.sgst)}</span></div>`
@@ -900,22 +1042,35 @@ function renderPOSCart() {
     <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;border-top:1px solid var(--border);margin-top:6px;padding-top:6px;">
       <span>Grand Total:</span><span style="color:var(--primary)">${fmtINR(t.grandTotal)}</span>
     </div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:${balance > 0 ? 'var(--danger)' : 'var(--success)'};margin-top:4px;">
-      <span>Tendered: ${fmtINR(tendered)}</span>
-      <span>Balance Due (Credit): ${fmtINR(balance)}</span>
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:${balance > 0 ? 'var(--danger)' : 'var(--success)'};margin-top:4px;">
+      <span>Paid Now: ${fmtINR(tendered)}</span>
+      <span>Credit / Balance Due: ${fmtINR(balance)}</span>
     </div>
   `;
 
-  payBox.innerHTML = AppState.posSplitPayments.map((p, idx) => `
-    <div style="display:flex;gap:6px;margin-bottom:6px;">
-      <select onchange="AppState.posSplitPayments[${idx}].method=this.value" style="width:120px;">
-        ${['CASH', 'UPI', 'CARD', 'BANK_TRANSFER'].map(m => `<option value="${m}" ${p.method === m ? 'selected' : ''}>${m}</option>`).join('')}
-      </select>
-      <input type="number" step="0.01" value="${esc(p.amount)}" placeholder="Amount" style="width:110px;" oninput="AppState.posSplitPayments[${idx}].amount=Number(this.value||0);renderPOSCart()">
-      <input type="text" value="${esc(p.reference)}" placeholder="UPI/Card Ref" style="flex:1;" oninput="AppState.posSplitPayments[${idx}].reference=this.value">
-      ${AppState.posSplitPayments.length > 1 ? `<button type="button" class="btn btn-secondary btn-sm" onclick="AppState.posSplitPayments.splice(${idx},1);renderPOSCart()">×</button>` : ''}
-    </div>
-  `).join('');
+  if (AppState.posCreditMode === 'FULL_CREDIT') {
+    payBox.innerHTML = `
+      <div style="padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;color:#991b1b;font-size:13px;">
+        <strong>Full Credit (Udhaar) Mode Active:</strong> ₹0 collected now. Full amount (${fmtINR(t.grandTotal)}) will be added to the selected customer's outstanding balance and tracked under Invoices &amp; Payments.
+      </div>
+    `;
+  } else {
+    payBox.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addPOSSplitPaymentRow()">+ Split Payment Method</button>
+      </div>
+      ${AppState.posSplitPayments.map((p, idx) => `
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <select onchange="AppState.posSplitPayments[${idx}].method=this.value" style="width:120px;">
+            ${['CASH', 'UPI', 'CARD', 'BANK_TRANSFER'].map(m => `<option value="${m}" ${p.method === m ? 'selected' : ''}>${m}</option>`).join('')}
+          </select>
+          <input type="number" step="0.01" value="${esc(p.amount)}" placeholder="Amount Paid" style="width:110px;" oninput="AppState.posSplitPayments[${idx}].amount=Number(this.value||0);AppState.posCreditMode='PARTIAL';renderPOSCart()">
+          <input type="text" value="${esc(p.reference)}" placeholder="UPI/Card Ref" style="flex:1;" oninput="AppState.posSplitPayments[${idx}].reference=this.value">
+          ${AppState.posSplitPayments.length > 1 ? `<button type="button" class="btn btn-secondary btn-sm" onclick="AppState.posSplitPayments.splice(${idx},1);renderPOSCart()">×</button>` : ''}
+        </div>
+      `).join('')}
+    `;
+  }
 }
 
 function addPOSSplitPaymentRow() {
@@ -978,6 +1133,15 @@ function recallPOSDraft(idx) {
 
 async function submitPOSSale() {
   if (AppState.posCart.length === 0 || AppState.isSubmitting) return;
+  const customerId = document.getElementById('pos-customer-select')?.value || 'CUS-0001';
+  const totals = calculatePOSCartTotals();
+  const tendered = AppState.posSplitPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+
+  if (totals.grandTotal - tendered > 0.01 && customerId === 'CUS-0001') {
+    showToast('Walk-in Customer cannot take goods on Credit. Please select a customer or click "+ New Customer".', 'error');
+    return;
+  }
+
   AppState.isSubmitting = true;
   const btn = document.getElementById('pos-complete-btn');
   if (btn) btn.disabled = true;
@@ -986,8 +1150,10 @@ async function submitPOSSale() {
   const idempotencyKey = ApiAdapter.generateIdempotencyKey('SALE');
   try {
     const payload = {
-      CustomerID: document.getElementById('pos-customer-select')?.value || 'CUS-0001',
+      CustomerID: customerId,
       TaxType: document.getElementById('pos-tax-type')?.value || 'INTRA',
+      InvoiceDiscountType: AppState.posInvoiceDiscountType,
+      InvoiceDiscountValue: AppState.posInvoiceDiscountValue,
       items: AppState.posCart,
       payments: AppState.posSplitPayments
     };
@@ -1006,14 +1172,27 @@ async function submitPOSSale() {
 }
 
 /**
- * 5. SALES INVOICES & PRINTABLE A4 / THERMAL RECEIPTS
+ * 5. SALES INVOICES, CREDIT TRACKING & PRINTABLE A4 / THERMAL RECEIPTS
  */
 function renderInvoices(container) {
+  const unpaidTotal = AppState.bundle.sales
+    .filter(s => s.Status !== 'CANCELLED')
+    .reduce((sum, s) => sum + Number(s.BalanceDue || 0), 0);
+
   container.innerHTML = `
     <div class="panel">
       <div class="panel-header">
-        <span class="panel-title">Sales Invoices &amp; Controlled Returns</span>
-        <input type="text" id="inv-search" placeholder="Search Invoice No or Customer..." oninput="filterInvoicesTable()" style="width:260px;">
+        <span class="panel-title">Sales Invoices &amp; Credit (Udhaar) Tracker — Total Pending: <span style="color:var(--danger)">${fmtINR(unpaidTotal)}</span></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="inv-search" placeholder="Search Invoice No or Customer..." oninput="filterInvoicesTable()" style="width:220px;">
+          <select id="inv-status-filter" onchange="filterInvoicesTable()">
+            <option value="">All Payment Statuses</option>
+            <option value="CREDIT_DUE">Credit / Pending Due Only (Unpaid &amp; Partial)</option>
+            <option value="UNPAID">Unpaid (Full Credit)</option>
+            <option value="PARTIAL">Partially Paid</option>
+            <option value="PAID">Fully Paid</option>
+          </select>
+        </div>
       </div>
       <div class="panel-body">
         <div class="table-responsive">
@@ -1023,6 +1202,7 @@ function renderInvoices(container) {
                 <th>Invoice No</th>
                 <th>Date</th>
                 <th>Customer</th>
+                <th>Discount</th>
                 <th>Taxable</th>
                 <th>GST</th>
                 <th>Grand Total</th>
@@ -1043,12 +1223,16 @@ function renderInvoices(container) {
 
 function filterInvoicesTable() {
   const q = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('inv-status-filter')?.value || '';
   const tbody = document.getElementById('invoices-tbody');
   if (!tbody) return;
 
-  const list = AppState.bundle.sales.filter(s =>
-    !q || String(s.InvoiceNo).toLowerCase().includes(q) || String(s.CustomerName).toLowerCase().includes(q)
-  );
+  const list = AppState.bundle.sales.filter(s => {
+    const matchQ = !q || String(s.InvoiceNo).toLowerCase().includes(q) || String(s.CustomerName).toLowerCase().includes(q);
+    const matchStatus = !statusFilter ||
+      (statusFilter === 'CREDIT_DUE' ? Number(s.BalanceDue) > 0 : String(s.PaymentStatus) === statusFilter);
+    return matchQ && matchStatus;
+  });
 
   tbody.innerHTML = list.map(s => {
     const totalTax = Number(s.CGST || 0) + Number(s.SGST || 0) + Number(s.IGST || 0);
@@ -1057,26 +1241,27 @@ function filterInvoicesTable() {
         <td><strong>${esc(s.InvoiceNo)}</strong></td>
         <td>${fmtDate(s.Date)}</td>
         <td>${esc(s.CustomerName)}</td>
+        <td style="color:var(--success)">-${fmtINR(s.DiscountTotal || 0)}</td>
         <td>${fmtINR(s.TaxableAmount)}</td>
         <td>${fmtINR(totalTax)}</td>
         <td><strong>${fmtINR(s.GrandTotal)}</strong></td>
         <td>${fmtINR(s.AmountPaid)}</td>
-        <td style="color:${Number(s.BalanceDue) > 0 ? 'var(--danger)' : 'var(--text-muted)'};font-weight:600;">${fmtINR(s.BalanceDue)}</td>
-        <td><span class="badge ${s.PaymentStatus === 'PAID' ? 'badge-success' : 'badge-warning'}">${esc(s.PaymentStatus)}</span></td>
+        <td style="color:${Number(s.BalanceDue) > 0 ? 'var(--danger)' : 'var(--text-muted)'};font-weight:700;">${fmtINR(s.BalanceDue)}</td>
+        <td><span class="badge ${s.PaymentStatus === 'PAID' ? 'badge-success' : s.PaymentStatus === 'PARTIAL' ? 'badge-warning' : 'badge-danger'}">${esc(s.PaymentStatus)}</span></td>
         <td style="display:flex;gap:4px;">
-          <button class="btn btn-secondary btn-sm" onclick="openInvoicePrintModal('${esc(s.InvoiceID)}')">View / Print</button>
-          ${Number(s.BalanceDue) > 0 ? `<button class="btn btn-primary btn-sm" onclick="openQuickInvoicePaymentModal('${esc(s.InvoiceID)}')">Pay</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="openInvoicePrintModal('${esc(s.InvoiceID)}')">Print</button>
+          ${Number(s.BalanceDue) > 0 ? `<button class="btn btn-primary btn-sm" onclick="openQuickInvoicePaymentModal('${esc(s.InvoiceID)}')">Collect Due</button>` : ''}
           <button class="btn btn-danger btn-sm" onclick="openSalesReturnModal('${esc(s.InvoiceID)}')">Return</button>
         </td>
       </tr>
     `;
-  }).join('') || '<tr><td colspan="10">No invoices found.</td></tr>';
+  }).join('') || '<tr><td colspan="11">No invoices found.</td></tr>';
 }
 
 function openQuickInvoicePaymentModal(invoiceId) {
   const inv = AppState.bundle.sales.find(s => s.InvoiceID === invoiceId);
   if (!inv) return;
-  openModal(`Record Balance Payment (${inv.InvoiceNo})`, `
+  openModal(`Collect Pending Credit (${inv.InvoiceNo})`, `
     <form onsubmit="submitPaymentForm(event)">
       <input type="hidden" name="PartyType" value="CUSTOMER">
       <input type="hidden" name="PartyID" value="${esc(inv.CustomerID)}">
@@ -1088,11 +1273,11 @@ function openQuickInvoicePaymentModal(invoiceId) {
           <input type="text" disabled value="${esc(inv.CustomerName)}">
         </div>
         <div class="form-group">
-          <label>Invoice Balance Due</label>
+          <label>Pending Invoice Balance</label>
           <input type="text" disabled value="${fmtINR(inv.BalanceDue)}">
         </div>
         <div class="form-group">
-          <label>Amount Received (₹) *</label>
+          <label>Amount Received Now (₹) *</label>
           <input type="number" step="0.01" min="0.01" max="${esc(inv.BalanceDue)}" name="Amount" required value="${esc(inv.BalanceDue)}">
         </div>
         <div class="form-group">
@@ -1107,11 +1292,11 @@ function openQuickInvoicePaymentModal(invoiceId) {
       </div>
       <div class="form-group">
         <label>Transaction Reference / Notes</label>
-        <input type="text" name="ReferenceNo" placeholder="UPI Ref / Bank Txn ID">
+        <input type="text" name="ReferenceNo" placeholder="UPI Ref / Cash Receipt Note">
       </div>
       <div class="modal-footer" style="padding:12px 0 0 0;">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button type="submit" class="btn btn-primary">Record Receipt</button>
+        <button type="submit" class="btn btn-primary">Record Receipt &amp; Update Balance</button>
       </div>
     </form>
   `);
@@ -1181,6 +1366,8 @@ function openInvoicePrintModal(invoiceId) {
           ${esc(st.INVOICE_TERMS)}
         </div>
         <div style="width:240px;">
+          <div style="display:flex;justify-content:space-between;"><span>Gross Subtotal:</span><span>${fmtINR(inv.Subtotal || inv.TaxableAmount)}</span></div>
+          ${Number(inv.DiscountTotal || 0) > 0 ? `<div style="display:flex;justify-content:space-between;color:#15803d;"><span>Total Discount:</span><span>-${fmtINR(inv.DiscountTotal)}</span></div>` : ''}
           <div style="display:flex;justify-content:space-between;"><span>Taxable Value:</span><span>${fmtINR(inv.TaxableAmount)}</span></div>
           <div style="display:flex;justify-content:space-between;"><span>CGST:</span><span>${fmtINR(inv.CGST)}</span></div>
           <div style="display:flex;justify-content:space-between;"><span>SGST:</span><span>${fmtINR(inv.SGST)}</span></div>
@@ -1245,7 +1432,7 @@ function openSalesReturnModal(invoiceId) {
         </div>
         <div class="form-group">
           <label>Reason for Return *</label>
-          <input type="text" name="Reason" required placeholder="e.g. Customer exchanged pack size">
+          <input type="text" name="Reason" required placeholder="e.g. Size exchange or customer return">
         </div>
       </div>
       <div class="modal-footer" style="padding:12px 0 0 0;">
@@ -1552,7 +1739,7 @@ function openPartyModal(partyType, id = '') {
         ` : `
           <div class="form-group">
             <label>Credit Limit (₹)</label>
-            <input type="number" name="CreditLimit" value="${esc(p.CreditLimit ?? 5000)}">
+            <input type="number" name="CreditLimit" value="${esc(p.CreditLimit ?? 15000)}">
           </div>
         `}
         ${!id ? `
@@ -1604,7 +1791,7 @@ async function reconcilePartiesUI() {
 }
 
 /**
- * 9. EXPENSES MODULE (Excludes Internal Cash/Bank Transfers from P&L)
+ * 9. EXPENSES MODULE
  */
 function renderExpenses(container) {
   const b = AppState.bundle;
@@ -1672,12 +1859,12 @@ function openExpenseModal() {
         <div class="form-group">
           <label>Category *</label>
           <select name="Category" onchange="this.form.IsInternalTransfer.value=(this.value==='Internal Cash/Bank Transfer'?'TRUE':'FALSE')">
+            <option value="Hamper Boxes, Ribbons & Packaging">Hamper Boxes, Ribbons &amp; Packaging</option>
             <option value="Utilities & Electricity">Utilities &amp; Electricity</option>
             <option value="Shop Rent">Shop Rent</option>
             <option value="Staff Salaries & Wages">Staff Salaries &amp; Wages</option>
-            <option value="Packaging & Carry Bags">Packaging &amp; Carry Bags</option>
-            <option value="Transport & Hamali">Transport &amp; Hamali</option>
-            <option value="Maintenance & Repairs">Maintenance &amp; Repairs</option>
+            <option value="Courier & Delivery Charges">Courier &amp; Delivery Charges</option>
+            <option value="Marketing & Exhibition Stall">Marketing &amp; Exhibition Stall</option>
             <option value="Internal Cash/Bank Transfer">Internal Cash/Bank Transfer (Contra)</option>
           </select>
         </div>
@@ -1697,7 +1884,7 @@ function openExpenseModal() {
       </div>
       <div class="form-group">
         <label>Description / Particulars *</label>
-        <input type="text" name="Description" required placeholder="e.g. Monthly shop electricity bill or Cash deposited in bank">
+        <input type="text" name="Description" required placeholder="e.g. Velvet jewellery boxes & gift hamper baskets">
       </div>
       <div class="form-grid">
         <div class="form-group">
@@ -1903,7 +2090,7 @@ async function submitPaymentForm(e) {
 }
 
 /**
- * 11. REPORTS MODULE (All 16 Required Business, Inventory, GST & Gross Profit Reports)
+ * 11. REPORTS MODULE (All 16 Reports)
  */
 function renderReports(container) {
   const today = todayISO();
@@ -1931,7 +2118,7 @@ function renderReports(container) {
               <option value="STOCK_LEDGER">9. Stock Movement Ledger</option>
               <option value="LOW_STOCK">10. Low-Stock Report</option>
               <option value="STOCK_VALUATION">11. Stock Valuation Report</option>
-              <option value="CUSTOMER_OUTSTANDING">12. Customer Outstanding Balances</option>
+              <option value="CUSTOMER_OUTSTANDING">12. Customer Outstanding (Credit / Udhaar)</option>
               <option value="SUPPLIER_OUTSTANDING">13. Supplier Outstanding Balances</option>
               <option value="EXPENSE_SUMMARY">14. Expense Summary (Excl. Contra)</option>
               <option value="GST_SUMMARY">15. GST Sales Summary</option>
@@ -1986,12 +2173,13 @@ function generateReportOutput() {
 
   switch (type) {
     case 'DAILY_SALES': {
-      headers = ['Date', 'Invoices Count', 'Taxable Sales', 'GST Total', 'Grand Total', 'Collected', 'Balance Due'];
+      headers = ['Date', 'Invoices Count', 'Discounts Given', 'Taxable Sales', 'GST Total', 'Grand Total', 'Collected', 'Credit Due'];
       const map = {};
       validSales.forEach(s => {
         const d = String(s.Date).slice(0, 10);
-        if (!map[d]) map[d] = { count: 0, tax: 0, gst: 0, total: 0, paid: 0, due: 0 };
+        if (!map[d]) map[d] = { count: 0, disc: 0, tax: 0, gst: 0, total: 0, paid: 0, due: 0 };
         map[d].count++;
+        map[d].disc += Number(s.DiscountTotal || 0);
         map[d].tax += Number(s.TaxableAmount || 0);
         map[d].gst += Number(s.CGST || 0) + Number(s.SGST || 0) + Number(s.IGST || 0);
         map[d].total += Number(s.GrandTotal || 0);
@@ -1999,23 +2187,24 @@ function generateReportOutput() {
         map[d].due += Number(s.BalanceDue || 0);
       });
       rows = Object.keys(map).sort().reverse().map(d => [
-        fmtDate(d), map[d].count, fmtINR(map[d].tax), fmtINR(map[d].gst), fmtINR(map[d].total), fmtINR(map[d].paid), fmtINR(map[d].due)
+        fmtDate(d), map[d].count, fmtINR(map[d].disc), fmtINR(map[d].tax), fmtINR(map[d].gst), fmtINR(map[d].total), fmtINR(map[d].paid), fmtINR(map[d].due)
       ]);
       break;
     }
     case 'MONTHLY_SALES': {
-      headers = ['Month (YYYY-MM)', 'Invoices', 'Taxable Value', 'Total GST', 'Grand Total'];
+      headers = ['Month (YYYY-MM)', 'Invoices', 'Discounts', 'Taxable Value', 'Total GST', 'Grand Total'];
       const map = {};
       validSales.forEach(s => {
         const m = String(s.Date).slice(0, 7);
-        if (!map[m]) map[m] = { count: 0, taxable: 0, gst: 0, total: 0 };
+        if (!map[m]) map[m] = { count: 0, disc: 0, taxable: 0, gst: 0, total: 0 };
         map[m].count++;
+        map[m].disc += Number(s.DiscountTotal || 0);
         map[m].taxable += Number(s.TaxableAmount || 0);
         map[m].gst += Number(s.CGST || 0) + Number(s.SGST || 0) + Number(s.IGST || 0);
         map[m].total += Number(s.GrandTotal || 0);
       });
       rows = Object.keys(map).sort().reverse().map(m => [
-        m, map[m].count, fmtINR(map[m].taxable), fmtINR(map[m].gst), fmtINR(map[m].total)
+        m, map[m].count, fmtINR(map[m].disc), fmtINR(map[m].taxable), fmtINR(map[m].gst), fmtINR(map[m].total)
       ]);
       break;
     }
@@ -2124,20 +2313,21 @@ function generateReportOutput() {
       break;
     }
     case 'GST_SUMMARY': {
-      headers = ['Invoice No', 'Date', 'Customer GSTIN', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Invoice Total'];
+      headers = ['Invoice No', 'Date', 'Customer GSTIN', 'Discount', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Invoice Total'];
       rows = validSales.map(s => [
-        s.InvoiceNo, fmtDate(s.Date), s.CustomerGSTIN || 'Unregistered', fmtINR(s.TaxableAmount), fmtINR(s.CGST), fmtINR(s.SGST), fmtINR(s.IGST), fmtINR(s.GrandTotal)
+        s.InvoiceNo, fmtDate(s.Date), s.CustomerGSTIN || 'Unregistered', fmtINR(s.DiscountTotal || 0), fmtINR(s.TaxableAmount), fmtINR(s.CGST), fmtINR(s.SGST), fmtINR(s.IGST), fmtINR(s.GrandTotal)
       ]);
       break;
     }
     case 'GROSS_PROFIT': {
       headers = ['Metric', 'Amount (₹)', 'Calculation Basis'];
       const grossTaxableSales = validSales.reduce((a, s) => a + Number(s.TaxableAmount || 0), 0);
+      const totalDiscounts = validSales.reduce((a, s) => a + Number(s.DiscountTotal || 0), 0);
       const returnsTaxable = b.salesReturns.filter(r => inRange(r.Date)).reduce((a, r) => a + Number(r.TaxableRefund || 0), 0);
       const cogs = validItems.reduce((a, si) => a + (Number(si.Quantity || 0) * Number(si.UnitCostSnapshot || 0)), 0);
       const estGrossProfit = grossTaxableSales - returnsTaxable - cogs;
       rows = [
-        ['1. Net Sales Revenue (Excl. GST, Less Discounts)', fmtINR(grossTaxableSales), 'Sum of Invoice Taxable Amounts'],
+        ['1. Net Sales Revenue (Excl. GST, After ' + fmtINR(totalDiscounts) + ' Discounts)', fmtINR(grossTaxableSales), 'Sum of Invoice Taxable Amounts'],
         ['2. Less: Sales Returns (Excl. GST)', fmtINR(returnsTaxable), 'Controlled Reversals in Period'],
         ['3. Less: Estimated Cost of Goods Sold (COGS)', fmtINR(cogs), 'Sold Qty × Unit Cost Snapshot (Not Raw Purchases)'],
         ['4. Estimated Gross Profit', fmtINR(estGrossProfit), 'Net Taxable Sales − Returns − Est. COGS']
@@ -2157,7 +2347,7 @@ function generateReportOutput() {
     ...rows.map(r => r.map(csvSafeCell).join(','))
   ];
   AppState.lastReportCSV = {
-    filename: `report-${type.toLowerCase()}-${todayISO()}.csv`,
+    filename: `rang-creation-${type.toLowerCase()}-${todayISO()}.csv`,
     content: csvLines.join('\n')
   };
 }
@@ -2184,7 +2374,7 @@ function renderSettings(container) {
           <form onsubmit="submitSettingsForm(event)">
             <div class="form-group">
               <label>Shop / Legal Business Name *</label>
-              <input type="text" name="SHOP_NAME" required value="${esc(st.SHOP_NAME || '')}">
+              <input type="text" name="SHOP_NAME" required value="${esc(st.SHOP_NAME || 'Rang Creation By Ekta')}">
             </div>
             <div class="form-grid">
               <div class="form-group">
@@ -2292,8 +2482,8 @@ async function submitSettingsForm(e) {
   showLoader(true);
   try {
     const settings = Object.fromEntries(new FormData(e.target).entries());
-    await ApiAdapter.request('saveSettings', { settings, syncTriggers: true });
-    showToast('Settings saved and scheduled triggers synchronised.');
+    const res = await ApiAdapter.request('saveSettings', { settings, syncTriggers: true });
+    showToast(res.message || 'Settings saved.');
     await refreshBundle();
   } catch (err) {
     showToast(err.message, 'error');
